@@ -1,0 +1,150 @@
+.
+├── README.md
+├── app
+│   ├── (auth)
+│   │   ├── login
+│   │   │   └── page.tsx
+│   │   └── signup
+│   │       └── page.tsx
+│   ├── (dashboard)
+│   │   ├── dashboard
+│   │   │   ├── ab-testing
+│   │   │   │   ├── actions.ts
+│   │   │   │   ├── new
+│   │   │   │   │   └── page.tsx
+│   │   │   │   └── page.tsx
+│   │   │   ├── campaigns
+│   │   │   │   ├── actions.ts
+│   │   │   │   └── page.tsx
+│   │   │   ├── embed
+│   │   │   │   ├── actions.ts
+│   │   │   │   └── page.tsx
+│   │   │   ├── page.tsx
+│   │   │   ├── settings
+│   │   │   │   ├── actions.ts
+│   │   │   │   ├── billing
+│   │   │   │   │   ├── actions.ts
+│   │   │   │   │   └── page.tsx
+│   │   │   │   └── page.tsx
+│   │   │   └── testimonials
+│   │   │       ├── moderation
+│   │   │       │   ├── actions.ts
+│   │   │       │   └── page.tsx
+│   │   │       └── page.tsx
+│   │   └── layout.tsx
+│   ├── (marketing)
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── api
+│   │   ├── razorpay
+│   │   │   └── create-order
+│   │   │       └── route.ts
+│   │   ├── verify-recaptcha
+│   │   │   └── route.ts
+│   │   ├── webhooks
+│   │   │   └── razorpay
+│   │   │       └── route.ts
+│   │   ├── widget
+│   │   │   └── [workspaceId]
+│   │   │       └── route.ts
+│   │   └── widget-analytics
+│   │       └── track
+│   │           └── route.ts
+│   ├── dashboard
+│   ├── favicon.ico
+│   ├── globals.css
+│   ├── layout.tsx
+│   ├── page.tsx
+│   ├── submit
+│   │   └── [linkId]
+│   │       ├── actions.ts
+│   │       ├── page.tsx
+│   │       └── success
+│   │           └── page.tsx
+│   ├── w
+│   │   └── [slug]
+│   │       └── page.tsx
+│   └── widget
+│       └── route.ts
+├── components
+│   ├── dashboard
+│   │   ├── billing-actions.tsx
+│   │   ├── campaign-list.tsx
+│   │   ├── campaign-modal.tsx
+│   │   ├── collection-link-card.tsx
+│   │   ├── create-campaign-button.tsx
+│   │   ├── create-variant-form.tsx
+│   │   ├── embed-code-generator.tsx
+│   │   ├── header.tsx
+│   │   ├── logo-uploader.tsx
+│   │   ├── moderation-actions.tsx
+│   │   ├── pricing-selector.tsx
+│   │   ├── settings-forms.tsx
+│   │   ├── sidebar.tsx
+│   │   ├── update-payment-modal.tsx
+│   │   ├── upgrade-button.tsx
+│   │   ├── upgrade-prompt.tsx
+│   │   ├── variant-manager.tsx
+│   │   └── widget-customizer.tsx
+│   ├── recaptcha-provider.tsx
+│   ├── scroll-to-top.tsx
+│   ├── submission
+│   │   ├── avatar-uploader.tsx
+│   │   └── submission-form.tsx
+│   └── ui
+│       ├── avatar.tsx
+│       ├── badge.tsx
+│       ├── button.tsx
+│       ├── card.tsx
+│       ├── dropdown-menu.tsx
+│       ├── input.tsx
+│       ├── label.tsx
+│       ├── select.tsx
+│       └── textarea.tsx
+├── components.json
+├── eslint.config.mjs
+├── folderstructure.txt
+├── lib
+│   ├── email
+│   │   ├── resend.ts
+│   │   ├── send.ts
+│   │   └── templates
+│   │       ├── testimonial-approved.tsx
+│   │       └── testimonial-submitted.tsx
+│   ├── razorpay
+│   │   ├── client.ts
+│   │   ├── plans.ts
+│   │   ├── subscriptions.ts
+│   │   └── webhooks.ts
+│   ├── recaptcha
+│   │   └── verify.ts
+│   ├── supabase
+│   │   ├── client.ts
+│   │   ├── middleware.ts
+│   │   ├── queries.ts
+│   │   └── server.ts
+│   ├── utils
+│   │   ├── cn.ts
+│   │   └── trial.ts
+│   └── utils.ts
+├── middleware.ts
+├── next-env.d.ts
+├── next.config.ts
+├── package-lock.json
+├── package.json
+├── postcss.config.mjs
+├── public
+│   ├── file.svg
+│   ├── globe.svg
+│   ├── next.svg
+│   ├── vercel.svg
+│   └── window.svg
+├── scripts
+├── tsconfig.json
+└── types
+    ├── database.ts
+    ├── subscription.ts
+    ├── supabase.ts
+    └── widget.ts
+
+47 directories, 101 files
