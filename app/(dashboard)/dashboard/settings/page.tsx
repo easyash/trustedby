@@ -143,7 +143,7 @@ export default async function SettingsPage() {
                 )}
                 {customer?.subscription_status === 'active' && (
                   <>
-                    {customer.currency === 'USD' ? '$12' : '₹999'}/month • 
+                    {customer.currency === 'USD' ? '₹999' : '₹999'}/month • 
                     {customer.billing_period === 'monthly' ? 'Monthly' : 'Annual'} billing
                   </>
                 )}
