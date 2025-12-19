@@ -16,7 +16,7 @@ class DodoPaymentsClient {
 
     this.config = {
       apiKey: process.env.DODO_API_KEY,
-      baseUrl: process.env.DODO_API_URL || 'https://api.dodopayments.com',
+      baseUrl: process.env.DODO_API_URL || 'https://api.dodo.com',
     }
   }
 
