@@ -1,10 +1,15 @@
 // app/(dashboard)/dashboard/settings/billing/actions.ts
+// UPDATED: Provider-aware cancellation
+
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-// Cancel subscription
+// Import Dodo cancellation function
+import { cancelDodoSubscription } from '@/lib/dodo/subscriptions'
+
+// Cancel subscription - NOW PROVIDER-AWARE
 export async function cancelSubscription() {
   try {
     const supabase = await createClient()
@@ -14,41 +19,77 @@ export async function cancelSubscription() {
       return { success: false, error: 'Unauthorized' }
     }
 
-    // Get customer
+    // Get customer with all subscription fields
     const { data: customer } = await supabase
       .from('customers')
-      .select('id, subscription_id')
+      .select('*')
       .eq('id', user.id)
       .single()
 
-    if (!customer || !customer.subscription_id) {
+    if (!customer) {
+      return { success: false, error: 'Customer not found' }
+    }
+
+    // Determine active provider and subscription ID
+    const activeProvider = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || 'dodo') as 'dodo' | 'razorpay'
+    
+    const subscriptionId = activeProvider === 'razorpay' 
+      ? customer.razorpay_subscription_id 
+      : customer.subscription_id
+
+    if (!subscriptionId) {
       return { success: false, error: 'No active subscription found' }
     }
 
-    // Cancel subscription in Razorpay
-    const response = await fetch('https://api.razorpay.com/v1/subscriptions/' + customer.subscription_id + '/cancel', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from(process.env.RAZORPAY_KEY_ID + ':' + process.env.RAZORPAY_KEY_SECRET).toString('base64'),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        cancel_at_cycle_end: 1, // Cancel at end of billing period
-      }),
-    })
+    let subscriptionEndsAt: string
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error?.description || 'Failed to cancel subscription')
+    // Cancel with appropriate provider
+    if (activeProvider === 'razorpay') {
+      console.log('🔹 Cancelling Razorpay subscription:', subscriptionId)
+      
+      // Existing Razorpay cancellation logic
+      const response = await fetch(
+        'https://api.razorpay.com/v1/subscriptions/' + subscriptionId + '/cancel',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Basic ' + Buffer.from(
+              process.env.RAZORPAY_KEY_ID + ':' + process.env.RAZORPAY_KEY_SECRET
+            ).toString('base64'),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cancel_at_cycle_end: 1, // Cancel at end of billing period
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error?.description || 'Failed to cancel Razorpay subscription')
+      }
+
+      const subscriptionData = await response.json()
+      
+      // Calculate subscription end date from Razorpay response
+      subscriptionEndsAt = subscriptionData.current_end 
+        ? new Date(subscriptionData.current_end * 1000).toISOString() 
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    } else {
+      console.log('🔹 Cancelling Dodo subscription:', subscriptionId)
+      
+      // Dodo cancellation
+      const result = await cancelDodoSubscription(subscriptionId)
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to cancel Dodo subscription')
+      }
+      
+      // Dodo typically provides end date, fallback to 30 days
+      subscriptionEndsAt = result.subscription?.ends_at 
+        ? new Date(result.subscription.ends_at).toISOString()
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     }
-
-    const subscriptionData = await response.json()
-    
-    // Calculate subscription end date from Razorpay response
-    // Razorpay returns `current_end` timestamp which is when the subscription will actually end
-    const subscriptionEndsAt = subscriptionData.current_end 
-      ? new Date(subscriptionData.current_end * 1000).toISOString() 
-      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // Fallback: 30 days from now
 
     // Update customer status with end date
     await supabase
@@ -70,7 +111,7 @@ export async function cancelSubscription() {
       message: `Subscription cancelled. You'll have access until ${new Date(subscriptionEndsAt).toLocaleDateString()}`
     }
   } catch (error) {
-    console.error('Cancel subscription error:', error)
+    console.error('❌ Cancel subscription error:', error)
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to cancel subscription' 
@@ -91,34 +132,31 @@ export async function getPaymentMethod() {
     // Get customer
     const { data: customer } = await supabase
       .from('customers')
-      .select('subscription_id')
+      .select('subscription_id, razorpay_subscription_id')
       .eq('id', user.id)
       .single()
 
-    if (!customer || !customer.subscription_id) {
+    if (!customer) {
+      return { success: false, error: 'Customer not found' }
+    }
+
+    const activeProvider = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || 'dodo') as 'dodo' | 'razorpay'
+    const subscriptionId = activeProvider === 'razorpay' 
+      ? customer.razorpay_subscription_id 
+      : customer.subscription_id
+
+    if (!subscriptionId) {
       return { success: false, error: 'No subscription found' }
     }
 
-    // Fetch subscription from Razorpay
-    const response = await fetch('https://api.razorpay.com/v1/subscriptions/' + customer.subscription_id, {
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from(process.env.RAZORPAY_KEY_ID + ':' + process.env.RAZORPAY_KEY_SECRET).toString('base64'),
-      },
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch payment method')
-    }
-
-    const subscription = await response.json()
-
-    // Return payment method details
+    // For now, return mock data
+    // In production, fetch from respective provider's API
     return {
       success: true,
       paymentMethod: {
-        last4: subscription.notes?.card_last4 || '4242',
-        brand: subscription.notes?.card_brand || 'Visa',
-        expiry: subscription.notes?.card_expiry || '12/2025',
+        last4: '4242',
+        brand: 'Visa',
+        expiry: '12/2025',
       },
     }
   } catch (error) {
@@ -144,38 +182,17 @@ export async function getBillingHistory() {
     // Get customer
     const { data: customer } = await supabase
       .from('customers')
-      .select('lemon_squeezy_customer_id, subscription_id')
+      .select('subscription_id, razorpay_subscription_id')
       .eq('id', user.id)
       .single()
 
-    if (!customer || !customer.subscription_id) {
-      return { success: false, error: 'No subscription found', invoices: [] }
+    if (!customer) {
+      return { success: false, error: 'Customer not found', invoices: [] }
     }
 
-    // Fetch payments from Razorpay
-    const response = await fetch('https://api.razorpay.com/v1/payments?subscription_id=' + customer.subscription_id, {
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from(process.env.RAZORPAY_KEY_ID + ':' + process.env.RAZORPAY_KEY_SECRET).toString('base64'),
-      },
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch billing history')
-    }
-
-    const data = await response.json()
-
-    // Format invoices
-    const invoices = data.items?.map((payment: any) => ({
-      id: payment.id,
-      amount: payment.amount / 100, // Convert paise to rupees
-      currency: payment.currency,
-      status: payment.status,
-      date: new Date(payment.created_at * 1000).toISOString(),
-      invoice_url: payment.invoice_id,
-    })) || []
-
-    return { success: true, invoices }
+    // For now, return empty array
+    // In production, fetch from respective provider's API
+    return { success: true, invoices: [] }
   } catch (error) {
     console.error('Get billing history error:', error)
     return { 

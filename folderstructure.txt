@@ -37,7 +37,11 @@
 │   │   └── page.tsx
 │   ├── api
 │   │   ├── razorpay
-│   │   │   └── create-order
+│   │   │   ├── create-order
+│   │   │   │   └── route.ts
+│   │   │   ├── create-subscription
+│   │   │   │   └── route.ts
+│   │   │   └── verify-payment
 │   │   │       └── route.ts
 │   │   ├── verify-recaptcha
 │   │   │   └── route.ts
@@ -87,6 +91,7 @@
 │   │   ├── variant-manager.tsx
 │   │   └── widget-customizer.tsx
 │   ├── recaptcha-provider.tsx
+│   ├── scroll-to-subscription.tsx
 │   ├── scroll-to-top.tsx
 │   ├── submission
 │   │   ├── avatar-uploader.tsx
@@ -147,4 +152,4 @@
     ├── supabase.ts
     └── widget.ts
 
-47 directories, 101 files
+49 directories, 104 files

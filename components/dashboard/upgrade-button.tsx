@@ -1,5 +1,5 @@
 // components/dashboard/upgrade-button.tsx
-// Multi-currency upgrade button with inline pricing selector
+// UPDATED: Provider-agnostic upgrade button
 
 'use client'
 
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PRICING, getPriceDisplay, getSavingsText, type Currency, type BillingPeriod } from '@/types/subscription'
+import { getActiveProvider } from '@/types/payment'
 
 interface UpgradeButtonProps {
   customerId: string
@@ -16,7 +17,7 @@ interface UpgradeButtonProps {
   customerName: string
   currentCurrency?: Currency
   currentBillingPeriod?: BillingPeriod
-  showSelector?: boolean // Show currency/period selector or just button
+  showSelector?: boolean
 }
 
 export default function UpgradeButton({ 
@@ -31,58 +32,23 @@ export default function UpgradeButton({
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(currentBillingPeriod)
   const [isLoading, setIsLoading] = useState(false)
 
-  const verifyPayment = async (paymentData: any) => {
-    try {
-      console.log('🔍 Verifying payment...', paymentData)
-      
-      const response = await fetch('/api/razorpay/verify-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          razorpay_payment_id: paymentData.razorpay_payment_id,
-          razorpay_subscription_id: paymentData.razorpay_subscription_id,
-          razorpay_signature: paymentData.razorpay_signature,
-        }),
-      })
-
-      const result = await response.json()
-      console.log('📋 Verification response:', result)
-
-      if (response.ok && result.success) {
-        toast.success("Subscription Activated! ✅", {
-          description: "Your Pro plan is now active. Redirecting...",
-        })
-        setTimeout(() => {
-          window.location.href = '/dashboard/settings#subscription'
-        }, 2000)
-      } else {
-        throw new Error(result.error || 'Payment verification failed')
-      }
-    } catch (error) {
-      console.error('❌ Verification error:', error)
-      toast.error("Verification Error", {
-        description: error instanceof Error ? error.message : "Failed to verify payment.",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const activeProvider = getActiveProvider()
 
   const handleUpgrade = async () => {
-    console.log('📝 Starting upgrade process...')
-    console.log('   Currency:', currency)
-    console.log('   Billing Period:', billingPeriod)
+    console.log('🔹 Starting upgrade process with', activeProvider)
     setIsLoading(true)
 
     try {
-      console.log('📝 Creating subscription for customer:', customerId)
-      const response = await fetch('/api/razorpay/create-subscription', {
+      // Use unified API endpoint
+      const response = await fetch('/api/payments/create-subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId,
           currency,
           billingPeriod,
+          customerEmail,
+          customerName,
         }),
       })
 
@@ -91,64 +57,20 @@ export default function UpgradeButton({
         throw new Error(error.error || 'Failed to create subscription')
       }
 
-      const { subscriptionId } = await response.json()
+      const { subscriptionId, checkoutUrl, shortUrl } = await response.json()
       console.log('✅ Subscription created:', subscriptionId)
 
-      // Wait for Razorpay SDK to load
-      let attempts = 0
-      while (typeof (window as any).Razorpay === 'undefined' && attempts < 50) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        attempts++
+      // Handle based on provider
+      if (activeProvider === 'dodo' && checkoutUrl) {
+        // DodoPayments: Redirect to checkout
+        console.log('🔀 Redirecting to Dodo checkout:', checkoutUrl)
+        window.location.href = checkoutUrl
+      } else if (activeProvider === 'razorpay' && subscriptionId) {
+        // Razorpay: Open modal (existing flow)
+        await openRazorpayModal(subscriptionId)
+      } else {
+        throw new Error('Invalid payment response')
       }
-
-      if (typeof (window as any).Razorpay === 'undefined') {
-        throw new Error('Razorpay SDK not loaded. Please refresh and try again.')
-      }
-
-      const plan = PRICING[currency]
-      const displayPrice = billingPeriod === 'monthly' 
-        ? `${plan.symbol}${plan.monthly}/month`
-        : `${plan.symbol}${plan.annualMonthly}/month (${plan.symbol}${plan.annual}/year)`
-
-      // Initialize Razorpay checkout
-      const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        subscription_id: subscriptionId,
-        name: 'TrustedBy',
-        description: `Pro Plan - ${displayPrice}`,
-        prefill: {
-          email: customerEmail,
-          name: customerName,
-        },
-        theme: {
-          color: '#3B82F6',
-        },
-        handler: function (response: any) {
-          console.log('💳 Payment successful!', response)
-          toast.success('Payment Successful! 🎉', {
-            description: 'Verifying your payment...',
-          })
-          verifyPayment(response)
-        },
-        modal: {
-          ondismiss: function () {
-            console.log('🚪 Modal dismissed')
-            setIsLoading(false)
-          },
-        },
-      }
-
-      const rzp = new (window as any).Razorpay(options)
-      
-      rzp.on('payment.failed', function (response: any) {
-        console.error('❌ Payment failed:', response.error)
-        toast.error('Payment Failed', {
-          description: response.error.description || 'Please try again.',
-        })
-        setIsLoading(false)
-      })
-      
-      rzp.open()
     } catch (error) {
       console.error('❌ Error initiating payment:', error)
       toast.error('Error', {
@@ -158,10 +80,80 @@ export default function UpgradeButton({
     }
   }
 
+  const openRazorpayModal = async (subscriptionId: string) => {
+    // Wait for Razorpay SDK
+    let attempts = 0
+    while (typeof (window as any).Razorpay === 'undefined' && attempts < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+      attempts++
+    }
+
+    if (typeof (window as any).Razorpay === 'undefined') {
+      throw new Error('Razorpay SDK not loaded. Please refresh and try again.')
+    }
+
+    const options = {
+      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      subscription_id: subscriptionId,
+      name: 'TrustedBy',
+      description: `Pro Plan - ${getPriceDisplay(currency, billingPeriod)}`,
+      prefill: {
+        email: customerEmail,
+        name: customerName,
+      },
+      theme: {
+        color: '#3B82F6',
+      },
+      handler: async function (response: any) {
+        toast.success('Payment Successful! 🎉', {
+          description: 'Verifying your payment...',
+        })
+        
+        try {
+          const verifyResponse = await fetch('/api/razorpay/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(response),
+          })
+
+          const result = await verifyResponse.json()
+
+          if (verifyResponse.ok && result.success) {
+            toast.success("Subscription Activated! ✅")
+            setTimeout(() => {
+              window.location.href = '/dashboard/settings#subscription'
+            }, 2000)
+          } else {
+            throw new Error(result.error || 'Payment verification failed')
+          }
+        } catch (error) {
+          toast.error("Verification Error", {
+            description: error instanceof Error ? error.message : "Failed to verify payment.",
+          })
+        } finally {
+          setIsLoading(false)
+        }
+      },
+      modal: {
+        ondismiss: function () {
+          setIsLoading(false)
+        },
+      },
+    }
+
+    const rzp = new (window as any).Razorpay(options)
+    rzp.on('payment.failed', function (response: any) {
+      toast.error('Payment Failed', {
+        description: response.error.description || 'Please try again.',
+      })
+      setIsLoading(false)
+    })
+    rzp.open()
+  }
+
   const plan = PRICING[currency]
 
   if (!showSelector) {
-    // Simple button without selector (for inline use)
     return (
       <Button onClick={handleUpgrade} disabled={isLoading} size="lg" className="w-full">
         {isLoading ? (
@@ -176,7 +168,6 @@ export default function UpgradeButton({
     )
   }
 
-  // Full pricing selector with currency and billing period options
   return (
     <div className="space-y-4">
       {/* Currency Selector */}
@@ -193,14 +184,14 @@ export default function UpgradeButton({
           >
             🇮🇳 INR (₹)
           </Button>
-{/*           <Button
+          <Button
             variant={currency === 'USD' ? 'default' : 'outline'}
             onClick={() => setCurrency('USD')}
             className="flex-1"
             size="sm"
           >
             🇺🇸 USD ($)
-          </Button> */}
+          </Button>
         </div>
       </div>
 
@@ -226,7 +217,7 @@ export default function UpgradeButton({
           >
             Annual
             <Badge className="ml-2 bg-green-500 text-xs">
-              {currency === 'USD' ? 'Save 17%' : 'Save 10%'}
+              Save 10%
             </Badge>
           </Button>
         </div>
@@ -270,7 +261,7 @@ export default function UpgradeButton({
       </Button>
 
       <p className="text-xs text-center text-gray-500">
-        Secure payment powered by Razorpay • Cancel anytime
+        Secure payment powered by {activeProvider === 'dodo' ? 'DodoPayments' : 'Razorpay'} • Cancel anytime
       </p>
     </div>
   )

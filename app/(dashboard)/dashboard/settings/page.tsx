@@ -14,6 +14,7 @@ import LogoUploader from '@/components/dashboard/logo-uploader'
 import ScrollToSubscription from '@/components/scroll-to-subscription'
 import { checkTrialStatus, checkSubscriptionStatus } from '@/lib/utils/trial'
 import type { Currency, BillingPeriod } from '@/types/subscription' // ADDED: Import types
+import PaymentStatusHandler from '@/components/payment-status-handler'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -48,7 +49,8 @@ export default async function SettingsPage() {
     <div className="space-y-6 max-w-4xl">
       {/* Scroll handler */}
       <ScrollToSubscription />
-      
+        <PaymentStatusHandler />
+
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
