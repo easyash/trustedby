@@ -1,5 +1,5 @@
 // lib/payment/factory.ts
-// Payment provider factory - abstraction layer for both providers
+// Payment provider factory - FIXED TypeScript error
 
 import { Currency, BillingPeriod } from '@/types/subscription'
 import { getActiveProvider } from '@/types/payment'
@@ -97,7 +97,7 @@ async function createDodoSubscriptionFlow(
 
     return {
       success: true,
-      subscriptionId: result.paymentId,
+      subscriptionId: result.sessionId, // FIXED: Changed from paymentId to sessionId
       checkoutUrl: result.checkoutUrl,
     }
   } catch (error) {
