@@ -1,5 +1,5 @@
 // lib/dodo/client.ts
-// DodoPayments API client - CORRECTED based on official docs
+// DodoPayments API client - CORRECTED based on official documentation
 
 interface DodoConfig {
   apiKey: string
@@ -14,9 +14,14 @@ class DodoPaymentsClient {
       throw new Error('DODO_API_KEY not configured')
     }
 
+    // Use correct base URL based on environment
+    const isTestMode = process.env.DODO_ENVIRONMENT === 'test_mode'
+    
     this.config = {
       apiKey: process.env.DODO_API_KEY,
-      baseUrl: process.env.DODO_API_URL || 'https://api.dodo.com',
+      baseUrl: isTestMode 
+        ? 'https://test.dodopayments.com'
+        : 'https://dodopayments.com',
     }
   }
 
@@ -25,6 +30,12 @@ class DodoPaymentsClient {
     options: RequestInit = {}
   ): Promise<any> {
     const url = `${this.config.baseUrl}${endpoint}`
+    
+    console.log('🔹 Dodo API Request:', {
+      method: options.method || 'GET',
+      url,
+      hasBody: !!options.body
+    })
     
     const response = await fetch(url, {
       ...options,
@@ -36,61 +47,95 @@ class DodoPaymentsClient {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        error.message || `DodoPayments API error: ${response.statusText}`
-      )
+      const errorText = await response.text()
+      console.error('❌ Dodo API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      })
+      
+      let errorMessage
+      try {
+        const errorJson = JSON.parse(errorText)
+        errorMessage = errorJson.message || errorJson.error || response.statusText
+      } catch {
+        errorMessage = errorText || response.statusText
+      }
+      
+      throw new Error(`DodoPayments API error: ${errorMessage}`)
     }
 
     return response.json()
   }
 
-  // Create a payment link for subscription
-  async createPaymentLink(data: {
-    product_id: string
-    customer_email: string
-    customer_name?: string
-    success_url: string
-    cancel_url: string
+  /**
+   * Create a checkout session (Official Dodo API method)
+   * This is the correct way to create subscriptions in Dodo
+   */
+  async createCheckoutSession(data: {
+    product_cart: Array<{
+      product_id: string
+      quantity: number
+    }>
+    customer: {
+      email: string
+      name?: string
+    }
+    return_url: string
+    subscription_data?: {
+      trial_period_days?: number
+    }
     metadata?: Record<string, any>
   }) {
-    return this.makeRequest('/payment-links', {
+    return this.makeRequest('/checkouts', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
-  // Get payment link details
-  async getPaymentLink(paymentLinkId: string) {
-    return this.makeRequest(`/payment-links/${paymentLinkId}`)
-  }
-
-  // Get subscription details
+  /**
+   * Get subscription details
+   */
   async getSubscription(subscriptionId: string) {
     return this.makeRequest(`/subscriptions/${subscriptionId}`)
   }
 
-  // Cancel subscription
-  async cancelSubscription(subscriptionId: string, data?: {
-    cancel_at_period_end?: boolean
-  }) {
+  /**
+   * Cancel subscription
+   */
+  async cancelSubscription(subscriptionId: string) {
     return this.makeRequest(`/subscriptions/${subscriptionId}/cancel`, {
       method: 'POST',
-      body: JSON.stringify(data || { cancel_at_period_end: true }),
+      body: JSON.stringify({
+        // Dodo will cancel at end of current period by default
+      }),
     })
   }
 
-  // List customer subscriptions
+  /**
+   * List customer subscriptions
+   */
   async listCustomerSubscriptions(customerEmail: string) {
     return this.makeRequest(`/subscriptions?customer_email=${encodeURIComponent(customerEmail)}`)
   }
 
-  // Get customer details
-  async getCustomer(customerEmail: string) {
-    return this.makeRequest(`/customers/${encodeURIComponent(customerEmail)}`)
+  /**
+   * Update payment method
+   */
+  async updatePaymentMethod(subscriptionId: string, data: {
+    type: 'new' | 'existing'
+    payment_method_id?: string
+    return_url?: string
+  }) {
+    return this.makeRequest(`/subscriptions/${subscriptionId}/payment-method`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
   }
 
-  // List payments
+  /**
+   * List payments
+   */
   async listPayments(params?: {
     customer_email?: string
     subscription_id?: string

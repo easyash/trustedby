@@ -1,16 +1,16 @@
 // app/api/webhooks/dodo/route.ts
-// DodoPayments webhook endpoint - CORRECTED based on official docs
+// DodoPayments webhook endpoint - CORRECTED based on official documentation
 
 import { NextResponse } from 'next/server'
 import {
   verifyDodoWebhookSignature,
-  handleDodoSubscriptionCreated,
-  handleDodoSubscriptionActivated,
+  handleDodoSubscriptionActive,
   handleDodoSubscriptionRenewed,
-  handleDodoSubscriptionCancelled,
-  handleDodoSubscriptionExpired,
-  handleDodoPaymentFailed,
+  handleDodoSubscriptionUpdated,
+  handleDodoSubscriptionOnHold,
+  handleDodoSubscriptionFailed,
   handleDodoPaymentSucceeded,
+  handleDodoPaymentFailed,
 } from '@/lib/dodo/webhooks'
 
 export async function POST(request: Request) {
@@ -41,47 +41,47 @@ export async function POST(request: Request) {
 
     console.log('✅ Webhook signature verified')
 
-    const data = JSON.parse(body)
-    const eventType = data.type
+    const event = JSON.parse(body)
+    const eventType = event.type
 
     console.log('📋 Webhook event:', eventType)
+    console.log('📋 Event data:', JSON.stringify(event.data, null, 2))
 
-    // Handle different webhook events
-    // Event types from Dodo docs: https://docs.dodopayments.com/webhooks
+    // Handle webhook events based on official Dodo documentation
     switch (eventType) {
-      case 'subscription.created':
-        console.log('🎯 Handling subscription.created')
-        await handleDodoSubscriptionCreated(data)
-        break
-
-      case 'subscription.activated':
-        console.log('🎯 Handling subscription.activated')
-        await handleDodoSubscriptionActivated(data)
+      case 'subscription.active':
+        console.log('🎯 Handling subscription.active')
+        await handleDodoSubscriptionActive(event.data)
         break
 
       case 'subscription.renewed':
         console.log('🎯 Handling subscription.renewed')
-        await handleDodoSubscriptionRenewed(data)
+        await handleDodoSubscriptionRenewed(event.data)
         break
 
-      case 'subscription.cancelled':
-        console.log('🎯 Handling subscription.cancelled')
-        await handleDodoSubscriptionCancelled(data)
+      case 'subscription.updated':
+        console.log('🎯 Handling subscription.updated')
+        await handleDodoSubscriptionUpdated(event.data)
         break
 
-      case 'subscription.expired':
-        console.log('🎯 Handling subscription.expired')
-        await handleDodoSubscriptionExpired(data)
+      case 'subscription.on_hold':
+        console.log('🎯 Handling subscription.on_hold')
+        await handleDodoSubscriptionOnHold(event.data)
         break
 
-      case 'payment.failed':
-        console.log('🎯 Handling payment.failed')
-        await handleDodoPaymentFailed(data)
+      case 'subscription.failed':
+        console.log('🎯 Handling subscription.failed')
+        await handleDodoSubscriptionFailed(event.data)
         break
 
       case 'payment.succeeded':
         console.log('🎯 Handling payment.succeeded')
-        await handleDodoPaymentSucceeded(data)
+        await handleDodoPaymentSucceeded(event.data)
+        break
+
+      case 'payment.failed':
+        console.log('🎯 Handling payment.failed')
+        await handleDodoPaymentFailed(event.data)
         break
 
       default:

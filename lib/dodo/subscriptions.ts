@@ -1,10 +1,14 @@
 // lib/dodo/subscriptions.ts
-// DodoPayments subscription management - CORRECTED based on official docs
+// DodoPayments subscription management - CORRECTED to use Checkout Sessions
 
 import { getDodoClient } from './client'
 import { getDodoProductId } from './plans'
 import { Currency, BillingPeriod } from '@/types/subscription'
 
+/**
+ * Create a Dodo checkout session for subscription
+ * This is the official Dodo API method for subscriptions
+ */
 export async function createDodoSubscription(
   currency: Currency,
   billingPeriod: BillingPeriod,
@@ -16,20 +20,31 @@ export async function createDodoSubscription(
     const dodo = getDodoClient()
     const productId = getDodoProductId(currency, billingPeriod)
 
-    console.log('🔹 Creating Dodo payment link for:', { 
+    console.log('🔹 Creating Dodo checkout session for:', { 
       productId, 
       customerEmail, 
       currency, 
       billingPeriod 
     })
 
-    // Create payment link (this is the correct Dodo flow)
-    const paymentLink = await dodo.createPaymentLink({
-      product_id: productId,
-      customer_email: customerEmail,
-      customer_name: customerName,
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?payment=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?payment=cancelled`,
+    // Create checkout session (official Dodo API)
+    const session = await dodo.createCheckoutSession({
+      product_cart: [
+        {
+          product_id: productId,
+          quantity: 1,
+        },
+      ],
+      customer: {
+        email: customerEmail,
+        name: customerName,
+      },
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?payment=success`,
+      // Optional: Add trial period if needed
+      // subscription_data: {
+      //   trial_period_days: 0,
+      // },
+      // Pass metadata for webhook handling
       metadata: {
         customer_id: customerId,
         currency,
@@ -37,13 +52,16 @@ export async function createDodoSubscription(
       },
     })
 
-    console.log('✅ Dodo payment link created:', paymentLink.id)
+    console.log('✅ Dodo checkout session created:', {
+      session_id: session.session_id,
+      checkout_url: session.checkout_url
+    })
 
     return {
       success: true,
-      paymentLink,
-      checkoutUrl: paymentLink.url, // The URL to redirect user to
-      paymentId: paymentLink.id,
+      session,
+      checkoutUrl: session.checkout_url, // URL to redirect user to
+      sessionId: session.session_id,
     }
   } catch (error) {
     console.error('❌ Error creating Dodo subscription:', error)
@@ -54,15 +72,17 @@ export async function createDodoSubscription(
   }
 }
 
+/**
+ * Cancel Dodo subscription
+ * Cancels at end of current billing period
+ */
 export async function cancelDodoSubscription(subscriptionId: string) {
   try {
     const dodo = getDodoClient()
     
     console.log('🔹 Cancelling Dodo subscription:', subscriptionId)
     
-    const result = await dodo.cancelSubscription(subscriptionId, {
-      cancel_at_period_end: true, // Cancel at end of billing period
-    })
+    const result = await dodo.cancelSubscription(subscriptionId)
     
     console.log('✅ Dodo subscription cancelled:', result)
     
@@ -79,6 +99,9 @@ export async function cancelDodoSubscription(subscriptionId: string) {
   }
 }
 
+/**
+ * Get Dodo subscription details
+ */
 export async function getDodoSubscription(subscriptionId: string) {
   try {
     const dodo = getDodoClient()
@@ -93,6 +116,9 @@ export async function getDodoSubscription(subscriptionId: string) {
   }
 }
 
+/**
+ * Get customer payments from Dodo
+ */
 export async function getDodoCustomerPayments(customerEmail: string) {
   try {
     const dodo = getDodoClient()

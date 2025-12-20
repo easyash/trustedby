@@ -1,12 +1,11 @@
 // lib/dodo/webhooks.ts
-// DodoPayments webhook verification and handlers - CORRECTED based on official docs
+// DodoPayments webhook handlers - CORRECTED based on official documentation
 
 import crypto from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 
 /**
  * Verify Dodo webhook signature
- * Dodo uses HMAC-SHA256 with webhook secret
  */
 export function verifyDodoWebhookSignature(
   payload: string,
@@ -25,56 +24,27 @@ export function verifyDodoWebhookSignature(
 }
 
 /**
- * Handle subscription.created event
- * Fired when a subscription is first created
+ * Handle subscription.active event
+ * This fires when subscription is successfully activated
  */
-export async function handleDodoSubscriptionCreated(data: any) {
+export async function handleDodoSubscriptionActive(data: any) {
   const supabase = await createClient()
   
+  const subscriptionId = data.subscription_id
   const customerEmail = data.customer?.email
-  const subscriptionId = data.id
+  
+  // Get customer_id from metadata (passed during checkout session creation)
   const metadata = data.metadata || {}
   const customerId = metadata.customer_id
 
-  console.log('📋 Subscription created:', { subscriptionId, customerEmail, customerId })
+  console.log('✅ Subscription active:', { subscriptionId, customerEmail, customerId })
 
   if (!customerId) {
     console.error('❌ No customer_id in subscription metadata')
     return
   }
 
-  // Update customer record with subscription ID
-  await supabase
-    .from('customers')
-    .update({
-      subscription_id: subscriptionId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', customerId)
-
-  console.log('✅ Subscription ID saved for customer:', customerId)
-}
-
-/**
- * Handle subscription.activated event
- * Fired when first payment succeeds and subscription becomes active
- */
-export async function handleDodoSubscriptionActivated(data: any) {
-  const supabase = await createClient()
-  
-  const customerEmail = data.customer?.email
-  const subscriptionId = data.id
-  const metadata = data.metadata || {}
-  const customerId = metadata.customer_id
-
-  console.log('💳 Subscription activated:', { subscriptionId, customerEmail, customerId })
-
-  if (!customerId) {
-    console.error('❌ No customer_id in subscription metadata')
-    return
-  }
-
-  // Activate subscription
+  // Activate subscription in database
   await supabase
     .from('customers')
     .update({
@@ -90,19 +60,37 @@ export async function handleDodoSubscriptionActivated(data: any) {
 
 /**
  * Handle subscription.renewed event
- * Fired when a recurring payment succeeds
+ * This fires when subscription renews for next billing period
  */
 export async function handleDodoSubscriptionRenewed(data: any) {
   const supabase = await createClient()
   
-  const subscriptionId = data.id
+  const subscriptionId = data.subscription_id
   const metadata = data.metadata || {}
   const customerId = metadata.customer_id
 
   console.log('🔄 Subscription renewed:', { subscriptionId, customerId })
 
   if (!customerId) {
-    console.error('❌ No customer_id in subscription metadata')
+    // If no customer_id in webhook, try to find by subscription_id
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('subscription_id', subscriptionId)
+      .single()
+
+    if (customer) {
+      await supabase
+        .from('customers')
+        .update({
+          subscription_status: 'active',
+          subscription_ends_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', customer.id)
+      
+      console.log('✅ Subscription renewed for customer:', customer.id)
+    }
     return
   }
 
@@ -120,104 +108,107 @@ export async function handleDodoSubscriptionRenewed(data: any) {
 }
 
 /**
- * Handle subscription.cancelled event
- * Fired when subscription is cancelled
+ * Handle subscription.updated event
+ * This fires on any subscription field change
  */
-export async function handleDodoSubscriptionCancelled(data: any) {
+export async function handleDodoSubscriptionUpdated(data: any) {
+  console.log('📝 Subscription updated:', data.subscription_id)
+  // Handle specific updates if needed
+  // For example: plan changes, quantity changes, etc.
+}
+
+/**
+ * Handle subscription.on_hold event
+ * This fires when subscription is put on hold due to failed payment
+ */
+export async function handleDodoSubscriptionOnHold(data: any) {
   const supabase = await createClient()
   
-  const subscriptionId = data.id
+  const subscriptionId = data.subscription_id
   const metadata = data.metadata || {}
   const customerId = metadata.customer_id
-  const endsAt = data.current_period_end // Timestamp when access ends
 
-  console.log('🛑 Subscription cancelled:', { subscriptionId, customerId, endsAt })
+  console.log('⚠️ Subscription on hold:', { subscriptionId, customerId })
 
   if (!customerId) {
-    console.error('❌ No customer_id in subscription metadata')
+    // Try to find by subscription_id
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('subscription_id', subscriptionId)
+      .single()
+
+    if (customer) {
+      await supabase
+        .from('customers')
+        .update({
+          subscription_status: 'on_hold',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', customer.id)
+      
+      console.log('⚠️ Subscription put on hold for customer:', customer.id)
+      // TODO: Send email to customer to update payment method
+    }
     return
   }
-
-  // Calculate subscription end date
-  const subscriptionEndsAt = endsAt 
-    ? new Date(endsAt * 1000).toISOString() // Dodo sends Unix timestamp
-    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // Fallback: 30 days
 
   await supabase
     .from('customers')
     .update({
-      subscription_status: 'cancelled',
-      subscription_ends_at: subscriptionEndsAt,
+      subscription_status: 'on_hold',
       updated_at: new Date().toISOString(),
     })
     .eq('id', customerId)
 
-  console.log('✅ Subscription marked as cancelled, ends at:', subscriptionEndsAt)
+  console.log('⚠️ Subscription put on hold for customer:', customerId)
+  // TODO: Send email to customer to update payment method
 }
 
 /**
- * Handle subscription.expired event
- * Fired when subscription period ends after cancellation
+ * Handle subscription.failed event
+ * This fires when subscription creation fails
  */
-export async function handleDodoSubscriptionExpired(data: any) {
-  const supabase = await createClient()
-  
-  const subscriptionId = data.id
-  const metadata = data.metadata || {}
-  const customerId = metadata.customer_id
-
-  console.log('⏰ Subscription expired:', { subscriptionId, customerId })
-
-  if (!customerId) {
-    console.error('❌ No customer_id in subscription metadata')
-    return
-  }
-
-  // Subscription has fully expired
-  await supabase
-    .from('customers')
-    .update({
-      subscription_status: 'cancelled',
-      subscription_ends_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', customerId)
-
-  console.log('✅ Subscription expired for customer:', customerId)
-}
-
-/**
- * Handle payment.failed event
- * Fired when a payment attempt fails
- */
-export async function handleDodoPaymentFailed(data: any) {
+export async function handleDodoSubscriptionFailed(data: any) {
   const subscriptionId = data.subscription_id
   const customerEmail = data.customer?.email
 
-  console.log('❌ Payment failed:', { subscriptionId, customerEmail })
-  
-  // Could send email notification to customer
-  // Could update status to indicate payment issue
-  // For now, just log it
+  console.log('❌ Subscription failed:', { subscriptionId, customerEmail })
+  // TODO: Send failure notification to customer
 }
 
 /**
  * Handle payment.succeeded event
- * Fired when a payment succeeds (first or recurring)
+ * This confirms successful payment
  */
 export async function handleDodoPaymentSucceeded(data: any) {
   const subscriptionId = data.subscription_id
-  const customerEmail = data.customer?.email
+  const paymentId = data.payment_id
   const amount = data.amount
   const currency = data.currency
 
   console.log('💰 Payment succeeded:', { 
     subscriptionId, 
-    customerEmail, 
+    paymentId,
     amount, 
     currency 
   })
 
-  // Payment recorded, subscription should already be active
-  // Could send receipt email here
+  // Payment recorded, subscription should already be active via subscription.active event
+  // You can store payment history here if needed
+}
+
+/**
+ * Handle payment.failed event
+ * This fires when a payment attempt fails
+ */
+export async function handleDodoPaymentFailed(data: any) {
+  const subscriptionId = data.subscription_id
+  const customerEmail = data.customer?.email
+  const reason = data.failure_reason
+
+  console.log('❌ Payment failed:', { subscriptionId, customerEmail, reason })
+  
+  // Note: subscription.on_hold event will also fire for failed renewals
+  // TODO: Send payment failure notification to customer
 }
