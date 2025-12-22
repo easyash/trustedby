@@ -88,6 +88,7 @@ async function createDodoSubscriptionFlow(
       params.customerName
     )
 
+    console.log('✅ Inside createDodoSubscriptionFlow')
     if (!result.success) {
       return {
         success: false,

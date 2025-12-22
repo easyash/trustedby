@@ -1,5 +1,5 @@
 // lib/dodo/client.ts
-// DodoPayments API client - CORRECTED based on official documentation
+// DodoPayments API client - FINAL FIX: Remove /api from base URL
 
 interface DodoConfig {
   apiKey: string
@@ -14,15 +14,22 @@ class DodoPaymentsClient {
       throw new Error('DODO_API_KEY not configured')
     }
 
-    // Use correct base URL based on environment
+    // Determine base URL based on environment
     const isTestMode = process.env.DODO_ENVIRONMENT === 'test_mode'
     
     this.config = {
       apiKey: process.env.DODO_API_KEY,
+      // FIXED: Remove /api suffix - the endpoint paths already include the full path
       baseUrl: isTestMode 
         ? 'https://test.dodopayments.com'
         : 'https://dodopayments.com',
     }
+
+    console.log('🔧 Dodo Client Config:', {
+      baseUrl: this.config.baseUrl,
+      environment: isTestMode ? 'test_mode' : 'live_mode',
+      hasApiKey: !!this.config.apiKey
+    })
   }
 
   private async makeRequest(
@@ -31,11 +38,18 @@ class DodoPaymentsClient {
   ): Promise<any> {
     const url = `${this.config.baseUrl}${endpoint}`
     
-    console.log('🔹 Dodo API Request:', {
+    console.log('📤 Dodo API Request:', {
       method: options.method || 'GET',
       url,
-      hasBody: !!options.body
+      headers: {
+        'Authorization': 'Bearer ***',
+        'Content-Type': 'application/json',
+      }
     })
+
+    if (options.body) {
+      console.log('📤 Request Body:', JSON.parse(options.body as string))
+    }
     
     const response = await fetch(url, {
       ...options,
@@ -46,13 +60,15 @@ class DodoPaymentsClient {
       },
     })
 
+    console.log('📥 Dodo API Response:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok
+    })
+
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('❌ Dodo API Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText
-      })
+      console.error('❌ Dodo API Error Response:', errorText)
       
       let errorMessage
       try {
@@ -65,12 +81,15 @@ class DodoPaymentsClient {
       throw new Error(`DodoPayments API error: ${errorMessage}`)
     }
 
-    return response.json()
+    const responseData = await response.json()
+    console.log('✅ Response Data:', responseData)
+    
+    return responseData
   }
 
   /**
-   * Create a checkout session (Official Dodo API method)
-   * This is the correct way to create subscriptions in Dodo
+   * Create a checkout session
+   * Official endpoint from Dodo docs: POST /checkouts
    */
   async createCheckoutSession(data: {
     product_cart: Array<{
@@ -87,6 +106,8 @@ class DodoPaymentsClient {
     }
     metadata?: Record<string, any>
   }) {
+    console.log('🛒 Creating checkout session with data:', data)
+    
     return this.makeRequest('/checkouts', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -106,9 +127,7 @@ class DodoPaymentsClient {
   async cancelSubscription(subscriptionId: string) {
     return this.makeRequest(`/subscriptions/${subscriptionId}/cancel`, {
       method: 'POST',
-      body: JSON.stringify({
-        // Dodo will cancel at end of current period by default
-      }),
+      body: JSON.stringify({}),
     })
   }
 
