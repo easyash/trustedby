@@ -75,6 +75,7 @@ export async function handleDodoSubscriptionRenewed(data: any) {
     .from('customers')
     .update({
       subscription_status: 'active',
+      subscription_id: subscriptionId,
       subscription_ends_at: null,
       updated_at: new Date().toISOString(),
     })
@@ -116,6 +117,44 @@ export async function handleDodoSubscriptionOnHold(data: any) {
   if (error) {
     console.error('❌ UPDATE ERROR:', error)
   }
+}
+
+export async function handleDodoSubscriptionCancelled(data: any) {
+
+  const subscriptionId = data.subscription_id
+  const customerId = data.metadata?.customer_id
+
+  console.log('✅ Subscription active:', { subscriptionId, customerId })
+
+  if (!customerId) {
+    console.error('❌ Missing customer_id in metadata')
+    return
+  }
+
+  const { data: updated, error } = await supabaseAdmin
+    .from('customers')
+    .update({
+      subscription_status: 'cancelled',
+      subscription_id: subscriptionId,
+      subscription_ends_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', customerId)
+    .select()
+    .maybeSingle()
+
+  if (error) {
+    console.error('❌ DATABASE UPDATE ERROR:', error)
+    return
+  }
+
+  if (!updated) {
+    console.warn('⚠️  No customer updated (id not found?)', customerId)
+    return
+  }
+
+  console.log('✅ Customer subscription cancelled:', updated.id)  
+  
 }
 
 export async function handleDodoSubscriptionFailed(data: any) {

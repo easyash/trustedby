@@ -9,6 +9,7 @@ import {
   handleDodoSubscriptionUpdated,
   handleDodoSubscriptionOnHold,
   handleDodoSubscriptionFailed,
+  handleDodoSubscriptionCancelled,
   handleDodoPaymentSucceeded,
   handleDodoPaymentFailed,
 } from '@/lib/dodo/webhooks'
@@ -52,6 +53,11 @@ export async function POST(request: Request) {
         console.log('🎯 Handling subscription.failed')
         await handleDodoSubscriptionFailed(event.data)
         break
+
+      case 'subscription.cancelled':
+        console.log('🎯 Handling subscription.cancelled')
+        await handleDodoSubscriptionCancelled(event.data)
+        break        
 
       case 'payment.succeeded':
         console.log('🎯 Handling payment.succeeded')
