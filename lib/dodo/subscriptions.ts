@@ -80,7 +80,7 @@ export async function cancelDodoSubscription(subscriptionId: string) {
   try {
     const dodo = getDodoClient()
     
-    console.log('🔹 Cancelling Dodo subscription:', subscriptionId)
+    console.log('🔹 Cancelling Dodo subscription in subscription.ts:', subscriptionId)
     
     const result = await dodo.cancelSubscription(subscriptionId)
     
