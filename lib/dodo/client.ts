@@ -22,7 +22,7 @@ class DodoPaymentsClient {
       // FIXED: Remove /api suffix - the endpoint paths already include the full path
       baseUrl: isTestMode 
         ? 'https://test.dodopayments.com'
-        : 'https://dodopayments.com',
+        : 'https://live.dodopayments.com',
     }
 
     console.log('🔧 Dodo Client Config:', {
